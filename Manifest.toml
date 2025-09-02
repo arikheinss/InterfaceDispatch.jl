@@ -1,0 +1,21 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.12.0-rc1"
+manifest_format = "2.0"
+project_hash = "71985d5e29236ea7daf3c2ecc81351082147fe8e"
+
+[[deps.HashArrayMappedTries]]
+git-tree-sha1 = "2eaa69a7cab70a52b9687c8bf950a5a93ec895ae"
+uuid = "076d061b-32b6-4027-95e0-9a2c6f6d7e74"
+version = "0.2.0"
+
+[[deps.InterfaceDispatch]]
+deps = ["MacroTools"]
+path = "."
+uuid = "1c7b3aaf-6ebb-431f-a690-91264976fa60"
+version = "0.1.0"
+
+[[deps.MacroTools]]
+git-tree-sha1 = "1e0228a030642014fe5cfe68c2c0a818f9e3f522"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.16"

@@ -1,0 +1,12 @@
+name = "InterfaceDispatch"
+uuid = "1c7b3aaf-6ebb-431f-a690-91264976fa60"
+version = "0.1.0"
+authors = ["arik heinss <arikheinss@yahoo.de>"]
+
+[deps]
+HashArrayMappedTries = "076d061b-32b6-4027-95e0-9a2c6f6d7e74"
+MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+
+[compat]
+HashArrayMappedTries = "0.2.0"
+MacroTools = "0.5.16"
