@@ -56,6 +56,15 @@ Base.convert(::Type{Union{ParametricType, T}}, ::Type{W}) where {W, T} = convert
 parametrictype(base, params...) = ParametricType(base, tolist(Union{TypeParam, ParametricType}, params))
 (t1 :: ParametricType == ::Type{T}) where T = T.name == t1.basetype.body.name
 
+ # Assumes, without checking, that p is fully and concretely applied
+jltype(p::ParametricType) =
+    if isempty(p.parameters)
+        return p.basetype
+    else
+        return Core.apply_type(p.basetype, jltype.(p.parameters)...)
+    end
+
+
 
 
 const SignatureType = Union{TypeParam, ParametricType}
