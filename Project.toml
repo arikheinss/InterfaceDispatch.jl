@@ -6,7 +6,9 @@ authors = ["arik heinss <arikheinss@yahoo.de>"]
 [deps]
 HashArrayMappedTries = "076d061b-32b6-4027-95e0-9a2c6f6d7e74"
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+SumTypes = "8e1ec7a9-0e02-4297-b0fe-6433085c89f2"
 
 [compat]
 HashArrayMappedTries = "0.2.0"
 MacroTools = "0.5.16"
+SumTypes = "0.5.8"

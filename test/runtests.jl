@@ -1,217 +1,435 @@
-using Test
 using InterfaceDispatch
+using SumTypes: isvariant
+for sym in names(InterfaceDispatch; all= true)
+    @eval import InterfaceDispatch: $sym
+end
+using Test 
 
+# ----------TestInterfaces -------------------------------------
+begin
+    struct ItersizeInfinite end
 
-for c in 'A':'Z'
-    @eval $(Symbol(c)) = TypeParam(string($c))
-    @eval $(Symbol(c * '2')) = TypeParam(string($c))
+    init_iter(v :: Vector) = 1
+    has_next(v :: Vector, i :: Int) = i ≤ length(v) 
+    get_next(v :: Vector, i :: Int) = @inbounds (v[i], i+1)
+
+    i_iter(I = TypeParam("I"), T = TypeParam("T"), ST = TypeParam("_ST")) = Interface([I, T, ST],[
+            interfacesig(init_iter, I, ST),
+            interfacesig(has_next, I, ST, Bool),
+            interfacesig(get_next, I, ST, parametrizedType(Tuple, T, ST)),
+        ],
+        "iterate")
+
+    i_sizediter(I = TypeParam("I"), T = TypeParam("T"), ST = TypeParam("_ST")) = 
+        let i = i_iter(I, T, ST)
+        push!(i.signatures, interfacesig(length, I, Int))
+        i 
+    end
+    i_infiter(I = TypeParam("I"), T = TypeParam("T"), ST = TypeParam("_ST")) = 
+        let i = i_iter(I, T, ST)
+        push!(i.signatures, interfacesig(length, I, ItersizeInfinite))
+        i 
+    end
+
+    i_vec(V = TypeParam("V"), T = TypeParam("T")) =
+        Interface(
+            [V, T],
+            [
+                interfacesig(getindex, V, T),
+                interfacesig(length, V, Int)
+            ],
+            "vec"
+        )
+    i_mutvec(V = TypeParam("V"), T = TypeParam("T")) = let i = i_vec(V, T)
+        push!(i.signatures, interfacesig(setindex!, V, T, Int, V))
+        i 
+    end
+
+    IAny = Interface(TypeParam[], InterfaceSignature[], "IAny")
+
+    struct SimpleVec{T}
+        ptr :: Ptr{T}
+        length :: Int 
+    end
+
+    struct Naturals end
+
+    ($)(base :: Union{UnionAll, DataType}, args) = parametrizedType(base, args...)
+    ($)(base :: Union{Function, IFunction}, args) = interfacesig(base, args...)
+        
+
+    struct AbstractVector´ end
+    struct AbstractDenseVector´ end
 end
 
-specific_with_reps(a, b) = let d = Dict()
-    more_specific(a,b; replacement_rules = d), d
-end
-const Empty = Dict()
-testmatch(a,b, req = Empty) = let (pass, d) = specific_with_reps(a, b)
-    pass && all(haskey(d, k) && d[k] == v for (k, v) in req)
-end
+
+@testset "Tests" begin
+    TC = TypeContext
+
+    A = TypeParam("A")
+    B = TypeParam("B")
+    C = TypeParam("C")
+    D = TypeParam("D")
+    E = TypeParam("E")
+    F = TypeParam("F")
+    G = TypeParam("G")
+    H = TypeParam("H")
+    I = TypeParam("I")
+    J = TypeParam("J")
+    K = TypeParam("K")
+    L = TypeParam("L")
+    M = TypeParam("M")
+    N = TypeParam("N")
+    O = TypeParam("O")
+    P = TypeParam("P")
+    Q = TypeParam("Q")
+    R = TypeParam("R")
+    S = TypeParam("S")
+    T = TypeParam("T")
+    U = TypeParam("U")
+    V = TypeParam("V")
+    W = TypeParam("W")
+    X = TypeParam("X")
+    Y = TypeParam("Y")
+    Z = TypeParam("Z")
+    _ST = TypeParam("_ST")
+    I2 = TypeParam("I")
+    _ST2 = TypeParam("_ST")
+    I3 = TypeParam("I")
+    _ST3 = TypeParam("_ST")
 
 
 
-@testset "basic" begin
-    @testset "ConcatIter" begin
-        itr = ConcatIter(((), [1, 2, 3], (), 4:9))
-        @test collect(itr) == collect(1:9)
-        @test eltype(itr) == Int
-        @test Base.IteratorSize(itr) == Base.HasLength()
+    @testset "types and parameters" begin
+        @test T ≠ TypeParam("T")
+
+        @test typebase(Int) === Int 
+        @test typebase(Array{1, Int}) === Array
+
+        tupledict = ParametrizedType(Dict, [T, ParametrizedType(Tuple, [T, T])])
+
+        context = TypeContext(T => Int, N => 1)
+        
+        @test apply_context(T, context) == Int
+        @test apply_context(tupledict, context) == Dict{Int, Tuple{Int, Int}}
+        @test apply_context(ParametrizedType(Dict, [T, W]), context) === novalue
+        @test apply_context(ParametrizedType(Array, [N, T]), context) == Array{1, Int}
+        @test apply_context(ParametrizedType(Array, [N, ParametrizedType(Tuple, [T, T])]), context) == Array{1, Tuple{Int, Int}}
+
+
+
+        
     end
-    @testset "parametric Types and type params" begin
+    @testset "context application" begin
+        @testset "InterfaceSignatures" begin
+            context1 = TC(V => Vector{Int})
 
-        # println(@macroexpand1 @testmatch ParametricType(Int)  ParametricType(Int)  Dict())
-        @test testmatch(T, W, Dict(W => T))
+            sig1 = InterfaceSignature(Base.length, TypeLike[V], Int)
+            @test apply_context(sig1, context1) == applicationresolved(context1)
+            @test apply_context(sig1, TC(V => Nothing)) == applicationfailed
 
-        @test testmatch( ParametricType(Int),  ParametricType(Int))
-        @test !(ParametricType(Float64) <-- ParametricType(Int))
+            sig2 = InterfaceSignature(length, TypeLike[V], T)
+            @test apply_context(sig2, context1) == applicationresolved(TC(V => Vector{Int}, T => Int))
+            
+            sig3 = interfacesig(length, V, String)
+            @test apply_context(sig3, context1) == applicationfailed
 
-        @test testmatch( ParametricType(Int),  T, Dict(T=> ParametricType(Int)))
-        @test testmatch(parametrictype(Vector, W), T, Dict(T => parametrictype(Vector, W)))
-        @test !(T <-- parametrictype(Int))
-        @test testmatch(parametrictype(Complex, Int), parametrictype(Complex, T), Dict(T => parametrictype(Int)))
-        @test testmatch(parametrictype(Tuple, T, T), parametrictype(Tuple, A, B), Dict(A => T, B => T))
-        @test testmatch(parametrictype(Tuple, T, W), parametrictype(Tuple, A, B), Dict(A => T, B => W))
-        @test !(parametrictype(Tuple, T, W) <-- parametrictype(Tuple, A, A))
+            @test apply_context(sig2, TC(V => parametrizedType(Array, 1, W))) == applicationincomplete
+
+        end
+        @testset "Interfaces" begin
+            ivec = Interface([V, T], [
+                interfacesig(getindex, V, Int, T),
+                interfacesig(length, V, Int),
+            ],
+            "Vec")
+            imutvec = i_mutvec(W, U)            
+
+            @test apply_context(ivec, TC(V => Vector{Int})) == applicationresolved(TC(V => Vector{Int}, T => Int))
+            @test apply_context(ivec, TC(T => Int)) == applicationincomplete
+            # Would it be better to return a partially applied Interface upon incomplete Application? Do we even use this method anywhere?
+
+            iiter = i_iter(I, T, _ST)
+            @test apply_context(iiter, TC(I => Vector{Int})) == applicationresolved(TC(I => Vector{Int}, T => Int, _ST => Int))
+        end
     end
-    @testset "signatures" begin
-        s1 = signature("", Int, Int; retval = Int)
-        s2 = signature("asdf", Int, Int; retval = Int)
-        s3 = signature("", Int, Int; retval = Bool)
-        @test testmatch(s1, s1, Empty)
-        @test !((s1 <-- s3) || (s3 <-- s1))
-        @test !((s1 <-- s2) || (s2 <-- s1))
-        st = signature("", Int, Int; retval = T)
-        @test testmatch(s1, st, Dict(T => parametrictype(Int)))
 
-
-        s1 = signature("", Int, Int; retval = Int)
-        st = signature("", Int, T; retval = Int)
-        @test testmatch(s1, st, Dict(T => parametrictype(Int)))
-
-
-        st = signature("", Int, T; retval = Int)
-        sw = signature("", Int, W; retval = Int)
-        svt = signature("", Int, parametrictype(Vector, W); retval = Int)
-        @test testmatch(st, sw, Dict(W => T))
-        @test testmatch( svt, st, Dict(T => parametrictype(Vector, W)))
-
-        s_t = signature("", T, T; retval = parametrictype(Vector, T))
-        s_abc = signature("", A, B; retval = parametrictype(Vector, C))
-
-        @test testmatch(s_t, s_abc, Dict(A => T, B => T, C => T))
-
-        si = signature("", Int, Int; retval = Bool)
-        @test fully_applied(si)
+    @testset "specificity tests" begin
         
-        s = signature("", Int, parametrictype(Dict, Int, String); retval = Bool)
-        @test fully_applied(s)
+        @testset "types and typeparams" begin
+            context = TypeContext(T => Int, N => 1)
 
-        s = signature("", T, parametrictype(Dict, Int, String); retval = Bool)
-        @test !fully_applied(s)
+            @test isvariant(more_specific(Int, Int), :equal)
+            @test more_specific(Int, Float64) === none
+            @test more_specific(T, Int) === none
+            @test more_specific(Int, T, context) == higher(context)
+            @test isvariant(more_specific(Int, T), :higher)
+            @test more_specific(String, T, context) == none
+            @test more_specific(1, N, context) == higher(context)
 
-        s = signature("", Int, parametrictype(Dict, Int, T), retval = Bool)
-        @test !fully_applied(s)
+            p = ParametrizedType(Array, [N, T])
+            @test more_specific(Array{1, Int}, p, context) == higher(context)
+            @test more_specific(ParametrizedType(Tuple, [T, T]), ParametrizedType(Tuple, [V, W])) == higher(TC(V => T, W => T))
+            @test more_specific(ParametrizedType(Tuple, [V, V]), ParametrizedType(Tuple, [T, W]), context) == none
+            @test more_specific(Tuple{Int, Int}, ParametrizedType(T, [Int, Int])) == higher(TC(T => Tuple))
+            @test more_specific(Tuple{Int, String}, ParametrizedType(T, [Int, Int])) == none
+            @test more_specific(Tuple{Int, Int}, ParametrizedType(T, [Int, Int])) == higher(TC(T => Tuple))
+        end
 
-        s = signature("", Int, parametrictype(Dict, Int, String), retval = W)
-        @test !fully_applied(s)
+        @testset "interfacesig" begin
+            sig1 = interfacesig(length, V, T)
+            sig2 = interfacesig(length, W, Int)
+            @test more_specific(sig2, sig1) == higher(TC(V => W, T => Int))
+
+            @test more_specific(interfacesig(length, Int, Int), interfacesig(size, Int, Int)) == none
+            @test more_specific(interfacesig(length, Int, Char, Int), interfacesig(length, T, T, Int)) == none
+            @test more_specific(interfacesig(length, Tuple{Int, Int}, Int), interfacesig(length, parametrizedType(Tuple, T, T), Int)) == higher(TC(T => Int))
+            @test more_specific(interfacesig(length, Int, Int), interfacesig(length, T, Int), TC(T=>Int)) == higher(TC(T => Int))
+            @test more_specific(interfacesig(length, Int, Int), interfacesig(length, Int, Int), TC(T=>Int)) == equal(TC(T => Int))
+            
+            
+        end
+        @testset "Interface" begin
+            ivec = Interface([V, T], [
+                interfacesig(getindex, V, Int, T),
+                interfacesig(length, V, Int),
+            ],
+            "Vec")
+            imutvec = Interface([W, U], [
+                interfacesig(getindex, W, Int, U),
+                interfacesig(length, W, Int),
+                interfacesig(setindex!, W, Int, U, W),
+            ],
+            "MutVec")
+
+            ivec2 = Interface([W, U], [
+                interfacesig(getindex, W, Int, U),
+                interfacesig(length, W, Int),
+            ],
+            "Vec2")
+            @test more_specific(ivec, ivec2) == equal(TC(W => V, U => T))
+            @test more_specific(imutvec, ivec) == higher(TC(T => U, V => W))
+            @test more_specific(ivec, imutvec) == none
+
+            function has_next end
+            function init_iter end 
+            function get_next end 
+
+            iiter = Interface([I, T, _ST], [
+                interfacesig(init_iter, I, _ST),
+                interfacesig(get_next, I, _ST, parametrizedType(Tuple, T, _ST)),
+                interfacesig(has_next, I, _ST, Bool),
+            ],
+            "iter",
+            )
+            isizediter = Interface([I2, U, _ST2], [
+                interfacesig(init_iter, I2, _ST2),
+                interfacesig(get_next, I2, _ST2, parametrizedType(Tuple, U, _ST2)),
+                interfacesig(has_next, I2, _ST2, Bool),
+                interfacesig(length, I2, Int),
+            ],
+            "sizediter",
+            )
+            iinfiter = Interface([I3, W, _ST3], [
+                interfacesig(init_iter, I3, _ST3),
+                interfacesig(get_next, I3, _ST3, parametrizedType(Tuple, W, _ST3)),
+                interfacesig(has_next, I3, _ST3, Bool),
+                interfacesig(length, I3, Int),
+            ],
+            "infiter",
+            )
+
+            @test more_specific(iinfiter, iiter) == higher(TC(I => I3, T => W, _ST => _ST3))
+            @test more_specific( iiter, iinfiter,) == none
+
+            @test more_specific(isizediter, iiter) == higher(TC(I => I2, T => U, _ST => _ST2))
+            @test more_specific( iiter, isizediter,) == none
+        end
+
+        @testset "MethodSignature" begin
+            iAny = Interface(TypeParam[], InterfaceSignature[], "IAny")
+            m1 = MethodSignature(TypeLike[Int, Int], iAny)
+            m2 = MethodSignature(TypeLike[T, T], Interface(TypeParam[T], InterfaceSignature[
+                interfacesig(+, T, T, T)
+            ], ""))
+
+            @test more_specific(m1, m2) == higher(TC(T => Int))
+            @test more_specific(m2, m1) == none
+
+            
+            function has_next end
+            function init_iter end 
+            function get_next end 
+
+            mi1 = MethodSignature(TypeLike[parametrizedType(Array, 1, T)], iAny)
+            mi2 = MethodSignature(TypeLike[U], Interface([I, U, _ST], [
+                interfacesig(init_iter, I, _ST),
+                interfacesig(get_next, I, _ST, parametrizedType(Tuple, U, _ST)),
+                interfacesig(has_next, I, _ST, Bool),
+            ],
+            "iter"))
+            
+            # see my comment on the corresponding method definition
+            @test_broken more_specific(m1, m2) == higher(TC(I => parametrizedType(Array, 1, T), U => T, _ST => Int))
+
+        end
+
+        
+        @testset "Vec{DataType} and Methodsigs" begin
+
+            # sum(Iterable[&I, T], Summable[&T])
+            i1 = i_iter(I, T, _ST)
+            push!(i1.signatures, interfacesig(+, T, T, T))
+            m1 = MethodSignature(TypeLike[I, T], i1)
+
+            @test more_specific([Vector{Int}, Int], m1) == higher(TC(I => Vector{Int}, T => Int, _ST => Int))
+        end
     end
-    @testset "interfaces" begin
-        function get end
-        function len end
-        vec = interface(
-             (V, T),
-             (
-                signature(get, V, Int; retval = T),
-                signature(len, V; retval = Int),
-            ),
-        )
-        println(vec)
-        function set end
-        mut_vec = interface(
-             (V2, T2),
-             (
-                signature(get, V2, Int; retval = T2),
-                signature(len, V2; retval = Int),
-                signature(set, V2, T2; retval = V2),
-            ),
-        )
-        println(mut_vec)
-        @test mut_vec <-- vec
-        @test !(vec <-- mut_vec)
-
-        function plus end
-        iadd_simple = interface(
-            (T,),
-             (
-                signature(plus, T, T; retval = T),
-            ),
-        )
-        iadd_hetero = interface(
-            (A, B, C),
-            (
-                signature(plus, A, B; retval = C),
-            ),
-        )
-        iadd_reducible = interface(
-            (X, Y),
-            (
-                signature(plus, X, Y; retval = X),
-            ),
-        )
-        @test testmatch(iadd_simple,  iadd_hetero, Dict(A => T, B => T, C => T))
-        @test !( iadd_hetero <-- iadd_simple)
-
-        @test testmatch(iadd_reducible, iadd_hetero, Dict(A => X, B => Y, C => X))
-        @test !( iadd_hetero <-- iadd_reducible)
-        
-        @test testmatch(iadd_simple,  iadd_reducible, Dict(X => T, Y => T))
-        @test !( iadd_reducible <-- iadd_simple)
-
-        i3 = interface((A, B, C), 
-            (signature("", A, C; retval = B), ))
-        i4 = interface((X, Y), 
-            (signature("", Y, Y; retval = X), ))
-        @test testmatch(i4, i3, Dict(A => Y, C => Y, B => X))
-
-        i_rep = applyReplacements(i3, Dict(B => W, C => Int))
-        @test i_rep isa Interface 
-        @test  length(i_rep.variables) == 2 && i_rep.variables[1].name == "A" && i_rep.variables[2].name == "W"
-        
-        @test length(i_rep.signatures) == 1 
-        @show i_rep
-        @show parametrictype(Int) == parametrictype(Int)
-        @test i_rep.signatures[1].args[1] == i_rep.variables[1]
-        @test i_rep.signatures[1].args[2] == parametrictype(Int)
-        @test i_rep.signatures[1].retval == i_rep.variables[2]
+    @testset "IFunctions" begin
+        i_length = IFunction("length")
+        i_getindex = IFunction("getindex")
+        i_setindex = IFunction("setindex")
+        i_collect = IFunction("collect")
+        i_init_iter = IFunction("init_iter")
+        i_has_next = IFunction("has_next")
+        i_get_next = IFunction("get_next")
         
 
+        # register_method(i_length, MethodSignature(TypeLike[parameterType]))
+        ms = MethodSignature
+
+        register_method(i_length, ms([SimpleVec$(A,)], IAny), x -> x.length)
+        register_method(i_length, ms([Naturals], IAny), x -> ItersizeInfinite())
+
+        register_method(i_getindex, ms([SimpleVec$(B,), Int], IAny), (v, i) -> Base.unsafe_load(v.ptr, i))
+        register_method(i_getindex, ms([Naturals, Int], IAny), (_, i) -> i)
+
+
+        a = [0.0, 1.0, 2.0]
+        v1 = SimpleVec(pointer(a), 3)
+        𝐍 = Naturals()
+
+        @test i_length(v1) == 3
+        @test i_length(𝐍) == ItersizeInfinite()
+
+        @test i_getindex(v1, 2) == a[2]
+        @test i_getindex(𝐍, 1337) == 1337
+
+        @test infer_returntype(i_length, [SimpleVec{Int}]) == Int
+        @test infer_returntype(i_length, [Naturals]) == ItersizeInfinite
+        @test infer_returntype(i_getindex, [SimpleVec{String}, Int]) == String
+
+        ivec = Interface([V, T], [
+            i_length$(V, Int),
+            i_getindex$(V, Int, T),
+        ], 
+        "Vec")
+
+        iiter = Interface([I, T, _ST], [
+            i_init_iter$(I, _ST),
+            i_has_next$(I, _ST, Bool),
+            i_get_next$(I, _ST, Tuple$(T, _ST)),
+        ],
+        "iiter"
+        )
+
+        @test apply_context(ivec, TC(V => SimpleVec{String})) == applicationresolved(TC(V => SimpleVec{String}, T => String))
+        @test apply_context(ivec, TC(V => Naturals)) == applicationfailed # Nats don't check Vec because length(𝐍) ≠ Int
+
+        @test apply_context(iiter, TC(I => SimpleVec{String})) == applicationfailed
+        @test apply_context(iiter, TC(I => Naturals)) == applicationfailed # Nats don't check Vec because length(𝐍) ≠ Int
+
+        register_method(i_init_iter, ms([V], ivec), x -> 1)
+        register_method(i_has_next, ms([V, Int], ivec), (v, i) -> i ≤ (i_length(v) :: Int))
+
+        getnext_simplevec(v :: SimpleVec{T}, i) where T = (i_getindex(v, i) :: T, i+1)
+        register_method(i_get_next, ms([V, Int], ivec), getnext_simplevec)
+
+        @test apply_context(iiter, TC(I => SimpleVec{String})) == applicationresolved(TC(I => SimpleVec{String}, T => String, _ST => Int))
+
+        @test let arr = Float64[], state = i_init_iter(v1)
+            while i_has_next(v1, state)
+                x, state = i_get_next(v1, state)
+                push!(arr, x)
+            end
+            arr == a 
+        end
+
+        i_zero = IFunction("zero")
+        iZero = Interface([V], [i_zero$(Type$(V,), V)], "IZero")
+
+        register_method(i_zero, ms([Type{Int}], IAny), _ -> 0)
+        register_method(i_zero, ms([Type{Float64}], IAny), _ -> 0.0)
+        register_method(i_zero, ms([Type{Bool}], IAny), _ -> false)
+
+        @test i_zero(Int) == 0
+        @test i_zero(Bool) == false
+
+        @test apply_context(iZero, TC(V => Bool)) == applicationresolved(TC(V => Bool))
+        @test apply_context(iZero, TC(V => Int)) == applicationresolved(TC(V => Int))
+        @test apply_context(iZero, TC(V => Int32)) == applicationfailed
+
+
+        complex_zero(::Type{Complex{V}}) where V = (i_zero(V) :: V) + im * (i_zero(V) :: V)
+        register_method(i_zero, ms([Type$(Complex$(V,),)], iZero), complex_zero)
+
+        @test i_zero(Complex{Int}) == 0 + 0 * im
+
+        @test_throws Any i_zero(Complex{Int32})
+
+        @test apply_context(iZero, TC(V => Complex{Int})) == applicationresolved(TC(V => Complex{Int}))
+        @test apply_context(iZero, TC(V => Complex{Int32})) == applicationfailed
+        
+
+
+
+        # so GC does not delete it before, since a is not used directly
+        Base.donotdelete(a)
+
+        struct IsSuperType end
+        struct NotSuperType end
+        struct NoSuperType end
+
+        i_parent = IFunction("parent")
+        register_method(i_parent, ms([Type$(T,)], IAny), _ -> NoSuperType())
+
+        i_isparent = IFunction("isparent")
+        register_method(i_isparent, ms([Type$(T,), Type$(T,)], IAny), (a, b) -> IsSuperType())
+        register_method(i_isparent, ms([Type$(T,), Type$(W,)], IAny), (a, b) -> NotSuperType())
+
+        i_isSuperType = Interface([T, S], [
+            i_isparent$(Type$(T,), Type$(S,), IsSuperType),
+        ],
+        "isSuperType",
+        )
+
+        i_parentIsSuperType =  Interface([T, S, P], [
+            i_parent$(Type$(T,), Type$(P,)),
+            i_isparent$(Type$(P,), Type$(S,), IsSuperType),
+        ],
+        "ParentIsSuperType"
+        )
+        
+        # this causes a StackOverflow, because I fixed the more_specific(::MSig, ::MSig) method.
+        register_method(i_isparent, ms([Type$(T,), Type$(S,)], i_parentIsSuperType), (a, b) -> IsSuperType())
+
+
+
+
+        # @test apply_context(i_isSuperType, TC(T => SimpleVec$(W,), S => AbstractVector´)) in (applicationfailed, applicationincomplete)
+
+        register_method(i_parent, ms([Type$(AbstractDenseVector´,)], IAny), _-> AbstractVector´)
+        register_method(i_parent, ms([Type$(SimpleVec$(W,),)], IAny), _-> AbstractDenseVector´)
+
+        @test infer_returntype(i_parent, DataType[Type{SimpleVec{Int}}]) === Type{AbstractDenseVector´}
+        @test infer_returntype(i_parent, DataType[Type{Int}]) === NoSuperType
+
+
+        @test apply_context(i_isSuperType, TC(T => SimpleVec{Int}, S => AbstractDenseVector´)) == applicationresolved(TC(T => SimpleVec{Int}, S => AbstractDenseVector´))
+        @test apply_context(i_isSuperType, TC(T => SimpleVec{Int}, S => AbstractVector´)) == applicationresolved(TC(T => SimpleVec{Int}, S => AbstractVector´))
+
+        # @test_broken apply_context(i_isSuperType, TC(T => SimpleVec$(W,), S => AbstractDenseVector´)) == applicationresolved(TC(T => SimpleVec$(W,), S => AbstractDenseVector´))
+        # @test_broken apply_context(i_isSuperType, TC(T => SimpleVec$(W,), S => AbstractVector´)) == applicationresolved(TC(T => SimpleVec$(W,), S => AbstractVector´))
     end
-    @testset "function tables" begin
-        testf = IFunction("test")
-
-        ia = IAny
-        # bottom
-        sig_i_i = callsig(Int, Int)
-        
-        sig_a_b = callsig(A, B; req = interface((A, B), 
-            (signature("", A; retval = A), )))
-        sig_c_d = callsig(C, D; req = interface((C, D),
-            (signature("", D; retval = D), )))
-        sig_x_y = callsig(X, Y; req = interface((X, Y),
-            (signature("", X; retval = X),
-            signature("", Y; retval = Y),)))
-        sig_e_e =  callsig(E, E; req = interface((E, ),
-            (signature("", E; retval = E), )))
-        sig_f_f = callsig(F, F)
-        sig_v_w = callsig(V, W)
-        @test more_specific(sig_f_f, sig_v_w)
-
-        @test more_specific(sig_a_b, sig_v_w)
-        @test more_specific(sig_c_d, sig_v_w)
-        @test !more_specific(sig_v_w, sig_a_b)
-        @test !more_specific(sig_v_w, sig_c_d)
-
-        @test more_specific(sig_x_y, sig_a_b)
-        @test more_specific(sig_x_y, sig_c_d)
-
-        @test more_specific(sig_e_e, sig_x_y)
-        @test more_specific(sig_i_i, sig_e_e)
-
-        @test more_specific(sig_e_e, sig_f_f)
-
-        
-
-        ib = interface((A,),
-            (
-                signature("b", A; retval = A),
-            ),
-        )
-        ic = interface((A,),
-            (
-                signature("b", A; retval = A),
-                signature("c", A; retval = A),
-            ),
-        )
-        id = interface((A,),
-            (
-                signature("b", A; retval = A),
-                signature("c", A; retval = A),
-                signature("d", A; retval = A),
-            ),
-        )
-        @assert (ib <-- ia) && (ic <-- ib) && (id <-- ic)
-
-        register(
-            testf, 
-            callsig(Int, Int; req = ia),
-            (i, j) -> i + j,
-        )
-    end
+    
 end
