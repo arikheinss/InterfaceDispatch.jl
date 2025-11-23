@@ -17,24 +17,15 @@ end
     getindex(V, Int) :: T 
     length(V) :: Int
 end
-# Potential Problem: Dict{Int, T} is now a Vec{&, T}
-# Solution: Dict does not implement getindex, but a 
-# different method getkey
 
 
 @interface Array{A, T, N} begin
     size(A) :: NTuple{N, Int}
-    getindex(A, NTuple{N, Int}...) :: T
+    getindex(A, Vararg{N, Int}) :: T
 end
 
 @Imethod size(v :: Vec{&I, T}) = (length(v), )
 
-struct ConstantComplexity end 
-struct LinearComplexity end 
-struct QuadraticComplexity end 
-
-# there is something cool here, just gotta figure it out
-@Imethod complexity( :: SimpleVec{T}, ::Function{getindex}, ::Type{Tuple{Int}}) = ConstantComplexity()
 
 @interface Iterable{I, T} begin
     init_iter(I) :: _1
